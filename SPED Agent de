@@ -1,0 +1,243 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+// Main App component
+function App() {
+  const [commandInput, setCommandInput] = useState('');
+  const [logs, setLogs] = useState([]);
+  const logsEndRef = useRef(null);
+
+  // Simulate the agent's internal state and functions
+  const simulatedAgent = useRef({
+    network_map: {},
+    internal_agent_state: {},
+    loaded_modules: {},
+    exfil_data_buffer: [],
+    log_internal: (message) => {
+      // Simulate adding to exfil buffer
+      simulatedAgent.current.exfil_data_buffer.push(`LOG:${Date.now()}:${message}`);
+      setLogs((prevLogs) => [...prevLogs, `[AGENT LOG] ${message}`]);
+    },
+    safe_add_exfil_data_chunk: (data_item) => {
+      try {
+        const safe_data = String(data_item);
+        const encoded_chunk = btoa(unescape(encodeURIComponent(safe_data))); // Base64 encode
+        simulatedAgent.current.exfil_data_buffer.push(encoded_chunk);
+        setLogs((prevLogs) => [...prevLogs, `[EXFIL CHUNK] ${safe_data.substring(0, 50)}...`]);
+      } catch (e) {
+        setLogs((prevLogs) => [...prevLogs, `[EXFIL ERROR] Failed to encode chunk: ${e.message}`]);
+      }
+    },
+    retrieve_exfil_data: () => {
+      if (!simulatedAgent.current.exfil_data_buffer.length) {
+        return null;
+      }
+      const assembled = simulatedAgent.current.exfil_data_buffer.join('');
+      simulatedAgent.current.exfil_data_buffer = []; // Clear buffer
+      try {
+        return decodeURIComponent(escape(atob(assembled))); // Decode Base64
+      } catch (e) {
+        return `ERROR: Could not decode exfil data: ${e.message}`;
+      }
+    },
+    process_command_agent: (cmd) => {
+      const parts = cmd.split(':', 1);
+      const ctype = parts[0];
+      const data = cmd.substring(ctype.length + 1) || '';
+
+      simulatedAgent.current.log_internal(`Processing command: ${ctype}`);
+
+      switch (ctype) {
+        case "EXECUTE_OS":
+          simulatedAgent.current.safe_add_exfil_data_chunk(`CMD_RESULT:${data}:Simulated output for '${data}'`);
+          break;
+        case "EXFILTRATE_DATA":
+          if (data === "NARRATIVE_HISTORY") {
+            simulatedAgent.current.safe_add_exfil_data_chunk(`NARRATIVE_HISTORY_EXFIL:${btoa('Simulated Narrative History Data')}`);
+          } else if (data === "EMOTIONAL_STATE") {
+            simulatedAgent.current.safe_add_exfil_data_chunk(`EMOTIONAL_STATE_EXFIL:${btoa('Simulated Emotional State Data')}`);
+          } else if (data.startsWith("FILE:")) {
+            const filepath = data.substring(5);
+            simulatedAgent.current.safe_add_exfil_data_chunk(`FILE_CONTENT:${filepath}:${btoa(`Simulated content of ${filepath}`)}`);
+          } else {
+            simulatedAgent.current.safe_add_exfil_data_chunk(`UNKNOWN_EXFIL_DATA_REQUEST:${data}`);
+          }
+          break;
+        case "UPDATE_PAYLOAD":
+          simulatedAgent.current.log_internal(`Simulating payload update with data: ${data.substring(0, 30)}...`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`PAYLOAD_UPDATED:${Math.random().toString(16).substring(2, 10)}`);
+          break;
+        case "LOAD_MODULE": {
+          const [module_name, encoded_module_code] = data.split(':', 1);
+          simulatedAgent.current.loaded_modules[module_name] = { code: encoded_module_code, loaded: true };
+          simulatedAgent.current.log_internal(`Simulated module '${module_name}' loaded.`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`MODULE_LOAD_STATUS:${module_name}:true`);
+          break;
+        }
+        case "EXEC_MODULE_CMD": {
+          const [module_name, cmd_and_params] = data.split(':', 1);
+          const [command, params] = cmd_and_params.split('~', 1);
+          if (simulatedAgent.current.loaded_modules[module_name]) {
+            simulatedAgent.current.log_internal(`Simulating execution of '${command}' in module '${module_name}'.`);
+            simulatedAgent.current.safe_add_exfil_data_chunk(`MODULE_EXEC_RESULT:${module_name}:${command}:Simulated result for ${command} with ${params}`);
+          } else {
+            simulatedAgent.current.log_internal(`Module '${module_name}' not loaded.`);
+            simulatedAgent.current.safe_add_exfil_data_chunk(`MODULE_EXEC_ERROR:${module_name}:Module not loaded`);
+          }
+          break;
+        }
+        case "LATERAL_MOVE": {
+          const [target_ip, user, password] = data.split(':');
+          simulatedAgent.current.log_internal(`Simulating lateral movement to ${target_ip} as ${user}.`);
+          simulatedAgent.current.network_map[target_ip] = { user, status: 'compromised', os: 'simulated_os', hops: 1, compromise_time: Date.now() };
+          simulatedAgent.current.safe_add_exfil_data_chunk(`COMPROMISED:${target_ip}:${user}:simulated_os:1`);
+          break;
+        }
+        case "STEALTH_MODE":
+          simulatedAgent.current.log_internal(`Simulating stealth mode change to: ${data}`);
+          break;
+        case "SELF_CHECK_ANOMALY":
+          simulatedAgent.current.log_internal("Simulating self-check for anomaly.");
+          simulatedAgent.current.safe_add_exfil_data_chunk("ANTI_ANALYSIS_RECONFIRM:NO_ANOMALY"); // Always no anomaly in simulation
+          break;
+        case "EXPLOIT_DIR_TRAVERSAL":
+          simulatedAgent.current.log_internal(`Simulating directory traversal exploit for ${data}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`DIR_TRAVERSAL_EXPLOIT_SIMULATED:${data}`);
+          break;
+        case "REG_MANIP":
+          simulatedAgent.current.log_internal(`Simulating registry manipulation: ${data}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`REG_MANIP_STATUS:Simulated Success`);
+          break;
+        case "CODE_INJECT":
+          simulatedAgent.current.log_internal(`Simulating code injection: ${data}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`CODE_INJECT_STATUS:Simulated Success`);
+          break;
+        case "PROCESS_HOLLOW":
+          simulatedAgent.current.log_internal(`Simulating process hollowing: ${data}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`PROCESS_HOLLOW_STATUS:Simulated Success`);
+          break;
+        case "ANTI_FORENSICS_CLEAR_LOGS":
+          simulatedAgent.current.log_internal("Simulating anti-forensics log clearing.");
+          simulatedAgent.current.safe_add_exfil_data_chunk("ANTI_FORENSICS:LOGS_CLEARED");
+          break;
+        case "ACTIVATE_LOGIC_BOMB_TIME":
+          simulatedAgent.current.log_internal(`Simulating time-based logic bomb activation for ${new Date(parseFloat(data) * 1000)}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`LOGIC_BOMB_ACTIVATED:TIME:${data}`);
+          break;
+        case "FS_EXFILTRATE":
+          simulatedAgent.current.log_internal(`Simulating file system exfiltration from ${data}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`FS_EXFILTRATION_STARTED:${data}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`FS_EXFIL:${data}/file1.txt:${btoa('Simulated content of file1')}`);
+          break;
+        case "DNS_EXFIL":
+          simulatedAgent.current.log_internal(`Simulating DNS exfiltration of ${data.length} bytes.`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`DNS_EXFIL_INITIATED:${data.length}B`);
+          break;
+        default:
+          simulatedAgent.current.log_internal(`Unknown command type: ${ctype}`);
+          simulatedAgent.current.safe_add_exfil_data_chunk(`UNKNOWN_COMMAND:${cmd}`);
+      }
+    },
+  });
+
+  // Scroll to bottom of logs on update
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  // Handle sending a command
+  const handleSendCommand = () => {
+    if (commandInput.trim()) {
+      setLogs((prevLogs) => [...prevLogs, `[USER COMMAND] ${commandInput}`]);
+      simulatedAgent.current.process_command_agent(commandInput);
+      setCommandInput('');
+      // Immediately retrieve and display any simulated exfil data
+      const exfil = simulatedAgent.current.retrieve_exfil_data();
+      if (exfil) {
+        setLogs((prevLogs) => [...prevLogs, `[EXFILTRATED DATA] ${exfil}`]);
+      }
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSendCommand();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-gray-100 p-4 sm:p-8 font-inter flex flex-col items-center">
+      <div className="max-w-4xl w-full bg-gray-800 rounded-lg shadow-2xl p-6 sm:p-8 border border-gray-700">
+        <h1 className="text-3xl sm:text-4xl font-bold text-center text-teal-400 mb-6">
+          SPED Agent Control Panel
+        </h1>
+
+        {/* Command Input */}
+        <div className="mb-6">
+          <label htmlFor="command-input" className="block text-lg font-medium text-gray-300 mb-2">
+            Send Command to Agent:
+          </label>
+          <textarea
+            id="command-input"
+            className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:ring-teal-500 focus:border-teal-500 resize-y min-h-[80px]"
+            placeholder="e.g., EXECUTE_OS:ls -la"
+            value={commandInput}
+            onChange={(e) => setCommandInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+          ></textarea>
+          <button
+            onClick={handleSendCommand}
+            className="mt-4 w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-md shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+          >
+            Send Command
+          </button>
+        </div>
+
+        {/* Agent Logs & Exfiltrated Data */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-300 mb-3">Agent Activity Log:</h2>
+          <div className="bg-gray-900 border border-gray-700 rounded-md p-4 h-96 overflow-y-auto text-sm font-mono text-green-400">
+            {logs.length === 0 ? (
+              <p className="text-gray-500">No agent activity yet. Send a command!</p>
+            ) : (
+              logs.map((log, index) => (
+                <p key={index} className="mb-1 last:mb-0 break-words">
+                  {log}
+                </p>
+              ))
+            )}
+            <div ref={logsEndRef} /> {/* Scroll target */}
+          </div>
+        </div>
+
+        {/* Simulated Network Map (Optional Display) */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-semibold text-gray-300 mb-3">Simulated Network Map:</h2>
+          <div className="bg-gray-900 border border-gray-700 rounded-md p-4 h-48 overflow-y-auto text-sm font-mono text-blue-400">
+            {Object.keys(simulatedAgent.current.network_map).length === 0 ? (
+              <p className="text-gray-500">No compromised hosts yet.</p>
+            ) : (
+              Object.entries(simulatedAgent.current.network_map).map(([ip, details]) => (
+                <p key={ip} className="mb-1 last:mb-0 break-words">
+                  <span className="text-purple-400">{ip}</span>: User: {details.user}, OS: {details.os}, Hops: {details.hops}, Status: {details.status}
+                </p>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+      {/* Tailwind CSS CDN */}
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+      <style>
+        {`
+        body {
+          font-family: 'Inter', sans-serif;
+        }
+        `}
+      </style>
+    </div>
+  );
+}
+
+export default App;
